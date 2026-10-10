@@ -4,6 +4,7 @@ use clap::{Parser, ValueEnum};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample, StreamConfig};
 use hush_core::journey::{beat_at, WIND_DOWN};
+use hush_core::params::DEFAULT_TONE_HZ;
 use hush_core::presets::{band_name, BINAURAL, ISOCHRONIC, TONES};
 use hush_core::{AmbientKind, NoiseColor, Params, Synth, ToneMode};
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
@@ -29,8 +30,8 @@ enum Mode {
     about = "Calm and sleep sounds, synthesized live. Ctrl-C to stop."
 )]
 struct Args {
-    /// Tone frequency in Hz (default 852). Use --no-tone for noise or nature only.
-    #[arg(long, default_value_t = 852.0)]
+    /// Tone frequency in Hz. Use --no-tone for noise or nature only.
+    #[arg(long, default_value_t = DEFAULT_TONE_HZ)]
     tone: f32,
     /// Turn the tone off.
     #[arg(long)]
@@ -291,6 +292,7 @@ fn main() {
     // Longest slow fade at the end of a timer; shorter timers fade over their last third.
     let fade = args.timer.map(|t| (t.as_secs_f32() / 3.0).min(600.0));
     let mut stopping_since: Option<Instant> = None;
+    let mut ctrl_c_handled = false;
     loop {
         std::thread::sleep(Duration::from_millis(100));
         if failed.load(Relaxed) {
@@ -303,16 +305,19 @@ fn main() {
                     params.set_beat_hz(b);
                 }
             }
-            if stop.load(Relaxed) {
-                params.fade_out(CTRL_C_FADE_SECONDS);
-                stopping_since = Some(Instant::now());
-            } else if let (Some(total), Some(fade)) = (args.timer, fade) {
+            if let (Some(total), Some(fade)) = (args.timer, fade) {
                 let left = total.saturating_sub(elapsed).as_secs_f32();
                 if left <= fade {
                     params.fade_out(left.max(1.0));
                     stopping_since = Some(Instant::now());
                 }
             }
+        }
+        // Ctrl-C always wins, even during a long timer fade: shorten it to a quick fade once.
+        if stop.load(Relaxed) && !ctrl_c_handled {
+            ctrl_c_handled = true;
+            params.fade_out(CTRL_C_FADE_SECONDS);
+            stopping_since = Some(Instant::now());
         }
         if let Some(since) = stopping_since {
             // Done when the engine reports silence, or by the clock if the audio thread has stalled.

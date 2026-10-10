@@ -120,7 +120,7 @@ CI runs formatting, Clippy with warnings denied, and the full test suite on Linu
 python3 -m http.server -d web 8000     # then open http://localhost:8000
 ```
 
-The page sends the WebAssembly bytes to an AudioWorklet once, then posts small control messages. The worklet renders each 128-frame quantum in Rust. Only the control functions can be called from the page; render and init cannot. `web/hush.wasm` is committed so the demo deploys as plain files; rebuild it with the script after changing the engine. The demo is deployed as static assets on Cloudflare Workers (`wrangler.jsonc`).
+The page sends the WebAssembly bytes to an AudioWorklet once, then posts small control messages. The worklet renders each 128-frame quantum in Rust. The page can call only the control exports; the render and buffer exports are used by the worklet alone. `web/hush.wasm` is committed so the demo deploys as plain files; rebuild it with the script after changing the engine. The demo is deployed as static assets on Cloudflare Workers (`wrangler.jsonc`).
 
 ## Project layout
 

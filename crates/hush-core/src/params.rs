@@ -9,7 +9,6 @@
 
 use crate::ambient::AmbientKind;
 use crate::noise::NoiseColor;
-use crate::synth::SWELL_DEPTH;
 use core::ops::RangeInclusive;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering::Relaxed};
 
@@ -21,6 +20,9 @@ pub const BEAT_RANGE: RangeInclusive<f32> = 0.5..=40.0;
 pub const LEVEL_RANGE: RangeInclusive<f32> = 0.0..=1.0;
 /// Shortest fade, so a zero or negative fade still ramps instead of stepping.
 pub const MIN_FADE_SECONDS: f32 = 0.01;
+
+/// How far the breathing swell dips the volume at the bottom of each breath.
+pub const SWELL_DEPTH: f32 = 0.35;
 
 /// Default tone frequency.
 pub const DEFAULT_TONE_HZ: f32 = 852.0;
@@ -76,7 +78,12 @@ impl ToneMode {
 impl TryFrom<u8> for ToneMode {
     type Error = u8;
     fn try_from(v: u8) -> Result<Self, u8> {
-        Self::ALL.get(v as usize).copied().ok_or(v)
+        match v {
+            0 => Ok(ToneMode::Steady),
+            1 => Ok(ToneMode::Binaural),
+            2 => Ok(ToneMode::Isochronic),
+            other => Err(other),
+        }
     }
 }
 
@@ -125,7 +132,7 @@ impl Default for Params {
 }
 
 impl Params {
-    /// Turns the tone layer on or off (it fades over about 20 ms).
+    /// Turns the tone layer on or off. The change is smoothed (see [`crate::synth::SMOOTHING_SECONDS`]).
     pub fn set_tone_enabled(&self, on: bool) {
         self.tone_enabled.store(on, Relaxed)
     }
@@ -173,7 +180,7 @@ impl Params {
     pub fn noise_enabled(&self) -> bool {
         self.noise_enabled.load(Relaxed)
     }
-    /// Noise colour. A change dips to silence for 50 ms so the filter reset never pops.
+    /// Noise colour. A change dips to silence briefly (see [`crate::synth::COLOR_DIP_SECONDS`]) so the filter reset never pops.
     pub fn set_noise_color(&self, color: NoiseColor) {
         self.noise_color.store(color as u8, Relaxed)
     }

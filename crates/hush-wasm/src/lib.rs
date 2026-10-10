@@ -110,8 +110,11 @@ pub extern "C" fn hush_set_mode(mode: u32, beat_hz: f32) {
 pub extern "C" fn hush_set_noise(enabled: u32, color: u32, level: f32) {
     with_params(|p| {
         p.set_noise_enabled(enabled != 0);
-        if let Some(c) = NoiseColor::ALL.get(color as usize) {
-            p.set_noise_color(*c);
+        if let Some(c) = u8::try_from(color)
+            .ok()
+            .and_then(|c| NoiseColor::try_from(c).ok())
+        {
+            p.set_noise_color(c);
         }
         p.set_noise_level(level);
     })

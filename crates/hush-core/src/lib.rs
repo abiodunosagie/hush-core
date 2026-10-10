@@ -32,5 +32,5 @@ pub mod synth;
 
 pub use ambient::AmbientKind;
 pub use noise::NoiseColor;
-pub use params::{Params, ToneMode};
+pub use params::{Params, ToneMode, BEAT_RANGE, LEVEL_RANGE, TONE_RANGE};
 pub use synth::Synth;

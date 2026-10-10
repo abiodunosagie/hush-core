@@ -6,6 +6,7 @@ const TONES = [
 const COLORS = ["Brown", "Pink", "White", "Green", "Blue", "Violet", "Grey"];
 const NATURE = ["Rain", "Ocean waves", "Wind", "Fireplace", "Stream"];
 
+// Defaults mirror hush-core's Params defaults (852 Hz, tone 0.6, noise 0.4, 6 Hz pulse).
 const state = {
   tone: { on: true, hz: 852, level: 0.6 },
   mode: 0, beat: 6,
@@ -73,6 +74,7 @@ async function start() {
   }
   if (!playing) return; // stopped while loading
   await ctx.resume();
+  if (!playing) return; // stopped while the context was resuming
   pushAll();
   send("hush_play", 2);
 }

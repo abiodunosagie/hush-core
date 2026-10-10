@@ -12,8 +12,7 @@ use std::sync::Arc;
 pub const TONE_MIX: f32 = 0.5;
 /// Breathing swell rate: 6 cycles a minute, a common slow relaxed breathing pace.
 pub const SWELL_HZ: f64 = 0.1;
-/// How far the breathing swell dips the volume at the bottom of each breath.
-pub const SWELL_DEPTH: f32 = 0.35;
+pub use crate::params::SWELL_DEPTH;
 /// Turning the swell on or off glides over this long, so switching mid-breath never steps the volume.
 pub const SWELL_GLIDE_SECONDS: f32 = 1.5;
 /// Spatial mode: one full swing across the head takes this long.
