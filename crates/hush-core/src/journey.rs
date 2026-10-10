@@ -1,6 +1,7 @@
 //! Sleep journeys: the pulse rate walks down in stages, gliding from one to the next.
 
-/// Hold this pulse rate for this many minutes. The last stage holds until stopped.
+/// One stage: glide into `beat` (over up to [`GLIDE_SECONDS`]) and hold it. `minutes` includes the glide.
+/// The last stage holds until stopped.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct JourneyStep {
     pub beat: f32,

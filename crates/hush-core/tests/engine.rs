@@ -3,8 +3,8 @@
 //! Run with `cargo test --release` (the long runs are slow in debug builds).
 
 use hush_core::journey::{beat_at, JourneyStep, GLIDE_SECONDS};
-use hush_core::presets::DEFAULT_TONE_HZ;
-use hush_core::synth::{ISOCHRONIC_EDGE_SECONDS, SPATIAL_PERIOD_SECONDS, SWELL_DEPTH};
+use hush_core::params::DEFAULT_TONE_HZ;
+use hush_core::synth::{ISOCHRONIC_EDGE_SECONDS, SPATIAL_PERIOD_SECONDS};
 use hush_core::{AmbientKind, NoiseColor, Params, Synth, ToneMode};
 use std::sync::Arc;
 
@@ -13,8 +13,7 @@ const BLOCK: usize = 512;
 
 fn playing() -> Arc<Params> {
     let p = Params::default();
-    p.tone_enabled
-        .store(false, std::sync::atomic::Ordering::Relaxed);
+    p.set_tone_enabled(false);
     p.play(0.5);
     Arc::new(p)
 }
@@ -58,9 +57,8 @@ fn measure(synth: &mut Synth, seconds: f64) -> Stats {
 
 fn noise_rms(color: NoiseColor) -> f64 {
     let p = playing();
-    p.noise_enabled
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-    p.noise_level.set(0.5);
+    p.set_noise_enabled(true);
+    p.set_noise_level(0.5);
     p.set_noise_color(color);
     let mut s = Synth::new(SR, p);
     measure(&mut s, 10.0).rms
@@ -97,17 +95,14 @@ fn every_colour_and_nature_sound_is_level_matched_to_brown() {
 fn all_layers_max(color: NoiseColor, minutes: f64) -> Stats {
     let p = playing();
     p.set_noise_color(color);
-    p.noise_enabled
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-    p.noise_level.set(1.0);
-    p.tone_enabled
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-    p.tone_level.set(1.0);
+    p.set_noise_enabled(true);
+    p.set_noise_level(1.0);
+    p.set_tone_enabled(true);
+    p.set_tone_level(1.0);
     p.set_tone_mode(ToneMode::Binaural);
-    p.beat_hz.set(12.0);
-    p.swell_depth.set(SWELL_DEPTH);
-    p.spatial_enabled
-        .store(true, std::sync::atomic::Ordering::Relaxed);
+    p.set_beat_hz(12.0);
+    p.set_swell(true);
+    p.set_spatial(true);
     for k in AmbientKind::ALL {
         p.set_ambient(k, 1.0);
     }
@@ -170,12 +165,11 @@ fn default_tone_is_852_hz_and_clearly_audible() {
 #[test]
 fn isochronic_at_10_hz_pulses_100_times_in_10_seconds_with_smooth_edges() {
     let p = playing();
-    p.tone_enabled
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-    p.tone_frequency.set(400.0);
-    p.tone_level.set(1.0);
+    p.set_tone_enabled(true);
+    p.set_tone_frequency(400.0);
+    p.set_tone_level(1.0);
     p.set_tone_mode(ToneMode::Isochronic);
-    p.beat_hz.set(10.0);
+    p.set_beat_hz(10.0);
     let mut s = Synth::new(SR, p);
     let mut l = vec![0.0f32; BLOCK];
     let mut r = vec![0.0f32; BLOCK];
@@ -216,12 +210,10 @@ fn isochronic_at_10_hz_pulses_100_times_in_10_seconds_with_smooth_edges() {
 fn spatial_movement_keeps_overall_loudness() {
     let rms = |spatial: bool| {
         let p = playing();
-        p.noise_enabled
-            .store(true, std::sync::atomic::Ordering::Relaxed);
-        p.noise_level.set(0.5);
+        p.set_noise_enabled(true);
+        p.set_noise_level(0.5);
         p.set_noise_color(NoiseColor::Pink);
-        p.spatial_enabled
-            .store(spatial, std::sync::atomic::Ordering::Relaxed);
+        p.set_spatial(spatial);
         let mut s = Synth::new(SR, p);
         measure(&mut s, SPATIAL_PERIOD_SECONDS * 2.0).rms
     };
@@ -232,9 +224,8 @@ fn spatial_movement_keeps_overall_loudness() {
 #[test]
 fn rapid_colour_and_mode_switching_stays_clean_then_fades_to_exact_silence() {
     let p = playing();
-    p.noise_enabled
-        .store(true, std::sync::atomic::Ordering::Relaxed);
-    p.noise_level.set(1.0);
+    p.set_noise_enabled(true);
+    p.set_noise_level(1.0);
     let mut s = Synth::new(SR, p.clone());
     let modes = [ToneMode::Steady, ToneMode::Binaural, ToneMode::Isochronic];
     let mut l = vec![0.0f32; BLOCK];
@@ -243,8 +234,7 @@ fn rapid_colour_and_mode_switching_stays_clean_then_fades_to_exact_silence() {
         if k % 10 == 0 {
             p.set_noise_color(NoiseColor::ALL[(k / 10) % NoiseColor::ALL.len()]);
             p.set_tone_mode(modes[(k / 10) % modes.len()]);
-            p.tone_enabled
-                .store(k % 20 == 0, std::sync::atomic::Ordering::Relaxed);
+            p.set_tone_enabled(k % 20 == 0);
         }
         s.render_planar(&mut l, &mut r);
         assert!(l.iter().chain(&r).all(|v| v.is_finite() && v.abs() <= 1.0));
@@ -253,7 +243,7 @@ fn rapid_colour_and_mode_switching_stays_clean_then_fades_to_exact_silence() {
     for _ in 0..(SR as usize / BLOCK + 2) {
         s.render_planar(&mut l, &mut r);
     }
-    assert_eq!(p.master_gain.get(), 0.0);
+    assert_eq!(p.master_gain(), 0.0);
     assert!(l.iter().chain(&r).all(|v| *v == 0.0));
 }
 
@@ -270,7 +260,7 @@ fn a_ten_minute_fade_lasts_ten_minutes() {
     while rendered < ((fade + 5.0) * SR as f64) as usize {
         s.render_planar(&mut l, &mut r);
         rendered += BLOCK;
-        if silent_at.is_none() && p.master_gain.get() == 0.0 {
+        if silent_at.is_none() && p.master_gain() == 0.0 {
             silent_at = Some(rendered as f64 / SR as f64);
         }
     }
@@ -288,13 +278,12 @@ fn a_rebuilt_engine_continues_the_fade_and_breath() {
     for _ in 0..(10.0 * SR) as usize / BLOCK {
         old.render_planar(&mut l, &mut r);
     }
-    let (before, breath_before) = (p.master_gain.get(), p.swell_phase.get());
+    let (before, breath_before) = (p.master_gain(), p.swell_phase());
     let mut rebuilt = Synth::resume(44_100.0, p.clone(), before as f64, breath_before as f64);
     rebuilt.render_planar(&mut l, &mut r);
-    let breath_gap =
-        ((p.swell_phase.get() - breath_before) as f64).rem_euclid(std::f64::consts::TAU);
+    let breath_gap = ((p.swell_phase() - breath_before) as f64).rem_euclid(std::f64::consts::TAU);
     let breath_gap = breath_gap.min(std::f64::consts::TAU - breath_gap);
-    assert!(before > 0.5 && (p.master_gain.get() - before).abs() < 0.01 && breath_gap < 0.01);
+    assert!(before > 0.5 && (p.master_gain() - before).abs() < 0.01 && breath_gap < 0.01);
 }
 
 #[test]

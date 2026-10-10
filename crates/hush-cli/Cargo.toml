@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "../../README.md"
+keywords = ["audio", "sleep", "noise", "binaural", "cli"]
+categories = ["multimedia::audio", "command-line-utilities"]
 
 [[bin]]
 name = "hush"
@@ -15,3 +18,4 @@ path = "src/main.rs"
 hush-core = { path = "../hush-core", version = "0.1.0" }
 cpal = "0.18"
 clap = { version = "4.6", features = ["derive"] }
+ctrlc = "3"

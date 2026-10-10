@@ -22,11 +22,16 @@ class HushProcessor extends AudioWorkletProcessor {
   process(_inputs, outputs) {
     const out = outputs[0];
     const n = out[0].length;
-    this.ex.hush_render(n);
-    // Memory can grow, so build views from the current buffer every quantum.
-    const mem = this.ex.memory.buffer;
-    out[0].set(new Float32Array(mem, this.ex.hush_left(), n));
-    if (out[1]) out[1].set(new Float32Array(mem, this.ex.hush_right(), n));
+    const max = this.ex.hush_max_frames();
+    // Render in chunks the engine can hold, in case the browser ever hands over a larger quantum.
+    for (let at = 0; at < n; at += max) {
+      const len = Math.min(max, n - at);
+      this.ex.hush_render(len);
+      // Memory can grow, so build views from the current buffer every time.
+      const mem = this.ex.memory.buffer;
+      out[0].set(new Float32Array(mem, this.ex.hush_left(), len), at);
+      if (out[1]) out[1].set(new Float32Array(mem, this.ex.hush_right(), len), at);
+    }
     // About 20 status updates a second for the breathing guide and the stop button.
     if ((this.frame += n) >= sampleRate / 20) {
       this.frame = 0;

@@ -38,15 +38,18 @@ impl NoiseColor {
         }
     }
 
-    pub fn from_u8(v: u8) -> Self {
-        *Self::ALL.get(v as usize).unwrap_or(&NoiseColor::Brown)
-    }
-
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL
             .iter()
             .copied()
             .find(|c| c.label().eq_ignore_ascii_case(name))
+    }
+}
+
+impl TryFrom<u8> for NoiseColor {
+    type Error = u8;
+    fn try_from(v: u8) -> Result<Self, u8> {
+        Self::ALL.get(v as usize).copied().ok_or(v)
     }
 }
 
@@ -58,7 +61,7 @@ const GREEN_TRIM: f32 = 0.22;
 const BLUE_TRIM: f32 = 0.17;
 const VIOLET_TRIM: f32 = 0.22;
 const GREY_TRIM: f32 = 0.2;
-/// Grey boosts the lows to roughly invert the ear's A-weighting curve.
+/// Grey adds a low shelf (a one-pole low-pass mixed back in) so the lows feel as loud as the highs.
 const GREY_LOW_BOOST: f32 = 6.0;
 
 /// One channel of coloured noise. Each channel has its own state so left and right are decorrelated.

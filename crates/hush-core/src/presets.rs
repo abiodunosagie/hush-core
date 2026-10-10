@@ -50,8 +50,6 @@ pub const TONES: [ToneChoice; 10] = [
     },
 ];
 
-pub const DEFAULT_TONE_HZ: f32 = 852.0;
-
 /// A carrier frequency and a beat rate.
 #[derive(Clone, Copy, Debug)]
 pub struct BeatPreset {

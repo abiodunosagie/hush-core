@@ -22,7 +22,7 @@ impl AmbientKind {
         AmbientKind::Fire,
         AmbientKind::Stream,
     ];
-    pub const COUNT: usize = 5;
+    pub const COUNT: usize = Self::ALL.len();
 
     pub fn label(self) -> &'static str {
         match self {

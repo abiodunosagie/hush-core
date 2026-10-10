@@ -5,11 +5,15 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SampleFormat, SizedSample, StreamConfig};
 use hush_core::journey::{beat_at, WIND_DOWN};
 use hush_core::presets::{band_name, BINAURAL, ISOCHRONIC, TONES};
-use hush_core::synth::SWELL_DEPTH;
 use hush_core::{AmbientKind, NoiseColor, Params, Synth, ToneMode};
-use std::sync::atomic::Ordering::Relaxed;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+/// Fade length when Ctrl-C is pressed.
+const CTRL_C_FADE_SECONDS: f32 = 1.5;
+/// Longest accepted timer, so absurd input cannot overflow `Duration`.
+const MAX_TIMER_SECONDS: f64 = 48.0 * 3600.0;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum Mode {
@@ -83,31 +87,36 @@ struct Args {
 
 fn parse_duration(s: &str) -> Result<Duration, String> {
     let s = s.trim().to_lowercase();
-    if let Ok(minutes) = s.parse::<f64>() {
-        return Ok(Duration::from_secs_f64(minutes * 60.0));
-    }
-    let (mut total, mut number) = (0.0f64, String::new());
-    for c in s.chars() {
-        if c.is_ascii_digit() || c == '.' {
-            number.push(c);
-            continue;
+    let seconds = if let Ok(minutes) = s.parse::<f64>() {
+        minutes * 60.0
+    } else {
+        let (mut total, mut number) = (0.0f64, String::new());
+        for c in s.chars() {
+            if c.is_ascii_digit() || c == '.' {
+                number.push(c);
+                continue;
+            }
+            let n: f64 = number.parse().map_err(|_| format!("bad duration: {s}"))?;
+            number.clear();
+            total += n * match c {
+                'h' => 3600.0,
+                'm' => 60.0,
+                's' => 1.0,
+                _ => return Err(format!("bad unit '{c}' in {s}; use h, m or s")),
+            };
         }
-        let n: f64 = number.parse().map_err(|_| format!("bad duration: {s}"))?;
-        number.clear();
-        total += n * match c {
-            'h' => 3600.0,
-            'm' => 60.0,
-            's' => 1.0,
-            _ => return Err(format!("bad unit '{c}' in {s}; use h, m or s")),
-        };
+        if !number.is_empty() {
+            return Err(format!("missing unit after {number} in {s}"));
+        }
+        total
+    };
+    if !seconds.is_finite() || seconds <= 0.0 {
+        return Err("duration must be a positive length of time".into());
     }
-    if !number.is_empty() {
-        return Err(format!("missing unit after {number} in {s}"));
+    if seconds > MAX_TIMER_SECONDS {
+        return Err("duration must be 48 hours or less".into());
     }
-    if total <= 0.0 {
-        return Err("duration must be above zero".into());
-    }
-    Ok(Duration::from_secs_f64(total))
+    Ok(Duration::from_secs_f64(seconds))
 }
 
 fn list() {
@@ -156,39 +165,49 @@ fn configure(args: &Args) -> Result<Arc<Params>, String> {
     if args.wind_down && matches!(mode, Mode::Steady) {
         mode = Mode::Binaural;
     }
-    p.tone_enabled.store(!args.no_tone, Relaxed);
-    p.tone_frequency.set(hz.clamp(20.0, 2000.0));
-    p.tone_level.set(args.volume.clamp(0.0, 1.0));
+    let numbers = [
+        ("--tone", hz),
+        ("--volume", args.volume),
+        ("--beat", beat),
+        ("--noise-volume", args.noise_volume),
+        ("--rain", args.rain),
+        ("--ocean", args.ocean),
+        ("--wind", args.wind),
+        ("--fire", args.fire),
+        ("--stream", args.stream),
+    ];
+    if let Some((name, _)) = numbers.iter().find(|(_, v)| !v.is_finite()) {
+        return Err(format!("{name} must be a number"));
+    }
+    // Params setters clamp to the engine's ranges.
+    p.set_tone_enabled(!args.no_tone);
+    p.set_tone_frequency(hz);
+    p.set_tone_level(args.volume);
     p.set_tone_mode(match mode {
         Mode::Steady => ToneMode::Steady,
         Mode::Binaural => ToneMode::Binaural,
         Mode::Isochronic => ToneMode::Isochronic,
     });
-    p.beat_hz.set(beat.clamp(0.5, 40.0));
+    p.set_beat_hz(beat);
     if let Some(name) = &args.noise {
         let color =
             NoiseColor::from_name(name).ok_or_else(|| format!("unknown noise colour '{name}'"))?;
         p.set_noise_color(color);
-        p.noise_enabled.store(true, Relaxed);
-        p.noise_level.set(args.noise_volume.clamp(0.0, 1.0));
+        p.set_noise_enabled(true);
+        p.set_noise_level(args.noise_volume);
     }
-    for (kind, level) in [
-        (AmbientKind::Rain, args.rain),
-        (AmbientKind::Ocean, args.ocean),
-        (AmbientKind::Wind, args.wind),
-        (AmbientKind::Fire, args.fire),
-        (AmbientKind::Stream, args.stream),
-    ] {
-        p.set_ambient(kind, level.clamp(0.0, 1.0));
-    }
-    p.swell_depth
-        .set(if args.swell { SWELL_DEPTH } else { 0.0 });
-    p.spatial_enabled.store(args.spatial, Relaxed);
+    p.set_ambient(AmbientKind::Rain, args.rain);
+    p.set_ambient(AmbientKind::Ocean, args.ocean);
+    p.set_ambient(AmbientKind::Wind, args.wind);
+    p.set_ambient(AmbientKind::Fire, args.fire);
+    p.set_ambient(AmbientKind::Stream, args.stream);
+    p.set_swell(args.swell);
+    p.set_spatial(args.spatial);
     Ok(Arc::new(p))
 }
 
 /// Opens the default output device and starts rendering into it in whatever sample format it wants.
-fn start_stream(params: Arc<Params>) -> Result<cpal::Stream, String> {
+fn start_stream(params: Arc<Params>, failed: Arc<AtomicBool>) -> Result<cpal::Stream, String> {
     let device = cpal::default_host()
         .default_output_device()
         .ok_or("no audio output device found")?;
@@ -196,10 +215,10 @@ fn start_stream(params: Arc<Params>) -> Result<cpal::Stream, String> {
     let format = supported.sample_format();
     let config: StreamConfig = supported.into();
     match format {
-        SampleFormat::F32 => build::<f32>(&device, config, params),
-        SampleFormat::I16 => build::<i16>(&device, config, params),
-        SampleFormat::U16 => build::<u16>(&device, config, params),
-        SampleFormat::I32 => build::<i32>(&device, config, params),
+        SampleFormat::F32 => build::<f32>(&device, config, params, failed),
+        SampleFormat::I16 => build::<i16>(&device, config, params, failed),
+        SampleFormat::U16 => build::<u16>(&device, config, params, failed),
+        SampleFormat::I32 => build::<i32>(&device, config, params, failed),
         other => Err(format!("unsupported sample format {other}")),
     }
 }
@@ -208,13 +227,14 @@ fn build<T>(
     device: &cpal::Device,
     config: StreamConfig,
     params: Arc<Params>,
+    failed: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, String>
 where
     T: SizedSample + FromSample<f32> + Send + 'static,
 {
     let channels = config.channels as usize;
     let mut synth = Synth::new(config.sample_rate as f32, params);
-    // Scratch for non-f32 devices, allocated here once so the callback never allocates.
+    // Scratch for the f32 render, allocated here once so the callback never allocates.
     let mut scratch = vec![0.0f32; 8192 * channels];
     let stream = device
         .build_output_stream(
@@ -228,7 +248,12 @@ where
                     }
                 }
             },
-            |err| eprintln!("audio: {err}"),
+            move |err| {
+                // Report once; the main loop sees the flag and exits instead of waiting on a dead stream.
+                if !failed.swap(true, Relaxed) {
+                    eprintln!("hush: audio stopped: {err}");
+                }
+            },
             None,
         )
         .map_err(|e| e.to_string())?;
@@ -242,42 +267,57 @@ fn main() {
         list();
         return;
     }
-    let params = match configure(&args) {
-        Ok(p) => p,
-        Err(e) => {
-            eprintln!("hush: {e}");
-            std::process::exit(2);
+    let params = configure(&args).unwrap_or_else(|e| {
+        eprintln!("hush: {e}");
+        std::process::exit(2);
+    });
+    let failed = Arc::new(AtomicBool::new(false));
+    let _stream = start_stream(params.clone(), failed.clone()).unwrap_or_else(|e| {
+        eprintln!("hush: {e}");
+        std::process::exit(1);
+    });
+    // Ctrl-C fades out over a moment instead of cutting the sound mid-waveform.
+    let stop = Arc::new(AtomicBool::new(false));
+    {
+        let stop = stop.clone();
+        if let Err(e) = ctrlc::set_handler(move || stop.store(true, Relaxed)) {
+            eprintln!("hush: Ctrl-C will stop abruptly ({e})");
         }
-    };
-    let _stream = match start_stream(params.clone()) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("hush: {e}");
-            std::process::exit(1);
-        }
-    };
+    }
     params.play(2.0);
     let started = Instant::now();
     println!("Playing. Ctrl-C to stop.");
 
     // Longest slow fade at the end of a timer; shorter timers fade over their last third.
     let fade = args.timer.map(|t| (t.as_secs_f32() / 3.0).min(600.0));
-    let mut fading = false;
+    let mut stopping_since: Option<Instant> = None;
     loop {
-        std::thread::sleep(Duration::from_millis(250));
+        std::thread::sleep(Duration::from_millis(100));
+        if failed.load(Relaxed) {
+            std::process::exit(1);
+        }
         let elapsed = started.elapsed();
-        if args.wind_down {
-            if let Some(b) = beat_at(elapsed.as_secs_f32(), &WIND_DOWN) {
-                params.beat_hz.set(b);
+        if stopping_since.is_none() {
+            if args.wind_down {
+                if let Some(b) = beat_at(elapsed.as_secs_f32(), &WIND_DOWN) {
+                    params.set_beat_hz(b);
+                }
+            }
+            if stop.load(Relaxed) {
+                params.fade_out(CTRL_C_FADE_SECONDS);
+                stopping_since = Some(Instant::now());
+            } else if let (Some(total), Some(fade)) = (args.timer, fade) {
+                let left = total.saturating_sub(elapsed).as_secs_f32();
+                if left <= fade {
+                    params.fade_out(left.max(1.0));
+                    stopping_since = Some(Instant::now());
+                }
             }
         }
-        if let (Some(total), Some(fade)) = (args.timer, fade) {
-            let left = total.saturating_sub(elapsed).as_secs_f32();
-            if !fading && left <= fade {
-                params.fade_out(left.max(1.0));
-                fading = true;
-            }
-            if fading && params.master_gain.get() == 0.0 {
+        if let Some(since) = stopping_since {
+            // Done when the engine reports silence, or by the clock if the audio thread has stalled.
+            let deadline = params.master_fade_seconds() + 2.0;
+            if params.master_gain() == 0.0 || since.elapsed().as_secs_f32() > deadline {
                 break;
             }
         }

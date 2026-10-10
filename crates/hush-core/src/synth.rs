@@ -6,7 +6,6 @@ use crate::ambient::{AmbientBank, AmbientKind};
 use crate::noise::{NoiseChannel, NoiseColor};
 use crate::params::{Params, ToneMode};
 use core::f64::consts::TAU;
-use core::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 
 /// Tone volume 1.0 maps to this peak amplitude, leaving headroom for the other layers.
@@ -174,29 +173,25 @@ impl Synth {
         let p = &*self.params;
         let requested = p.noise_color();
         let mode = p.tone_mode();
-        let noise_target = if p.noise_enabled.load(Relaxed) {
-            p.noise_level.get()
+        let noise_target = if p.noise_enabled() {
+            p.noise_level()
         } else {
             0.0
         };
-        let tone_target = if p.tone_enabled.load(Relaxed) {
-            p.tone_level.get()
+        let tone_target = if p.tone_enabled() {
+            p.tone_level()
         } else {
             0.0
         };
-        let swell_target = p.swell_depth.get();
-        let spatial_target = if p.spatial_enabled.load(Relaxed) {
-            1.0
-        } else {
-            0.0
-        };
+        let swell_target = p.swell_depth();
+        let spatial_target = if p.spatial() { 1.0 } else { 0.0 };
         let iso_target = if mode == ToneMode::Isochronic {
             1.0
         } else {
             0.0
         };
-        let beat = (p.beat_hz.get() as f64).max(0.1);
-        let freq_l = p.tone_frequency.get() as f64;
+        let beat = p.beat_hz() as f64;
+        let freq_l = p.tone_frequency() as f64;
         let freq_r = freq_l
             + if mode == ToneMode::Binaural {
                 beat
@@ -211,10 +206,10 @@ impl Synth {
         let gate_edge = (ISOCHRONIC_EDGE_SECONDS * beat).min(0.25);
         let inc_swell = TAU * SWELL_HZ / sr;
         let inc_spatial = TAU / (SPATIAL_PERIOD_SECONDS * sr);
-        let master_target = p.master_target.get() as f64;
-        let master_step = 1.0 / ((p.master_fade_seconds.get().max(0.01) as f64) * sr);
-        for (k, target) in self.ambient_targets.iter_mut().enumerate() {
-            *target = p.ambient_levels[k].get();
+        let master_target = p.master_target() as f64;
+        let master_step = 1.0 / (p.master_fade_seconds() as f64 * sr);
+        for (target, kind) in self.ambient_targets.iter_mut().zip(AmbientKind::ALL) {
+            *target = p.ambient_level(kind);
         }
 
         for i in 0..frames {
@@ -294,8 +289,7 @@ impl Synth {
             write(i, Self::soft_clip(l * g), Self::soft_clip(r * g));
         }
 
-        p.master_gain.set(self.master as f32);
-        p.swell_phase.set(self.swell_phase as f32);
+        p.report(self.master as f32, self.swell_phase as f32);
     }
 }
 

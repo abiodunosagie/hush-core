@@ -14,7 +14,9 @@ const state = {
   swell: false, spatial: false,
 };
 
-let ctx, node, playing = false;
+let ctx, node, loading = null;
+// What the listener asked for. Set immediately on click, so a Stop during the first load still wins.
+let playing = false;
 const $ = (s) => document.querySelector(s);
 
 function send(fn, ...args) {
@@ -30,27 +32,54 @@ function pushAll() {
   send("hush_set_spatial", state.spatial ? 1 : 0);
 }
 
-async function start() {
-  if (!ctx) {
-    ctx = new AudioContext();
+// Builds the audio graph once. Only assigns ctx and node when everything loaded, so a failed first
+// attempt (network error, missing file) can simply be retried by pressing Play again.
+async function ensureAudio() {
+  if (node) return;
+  const context = new AudioContext();
+  try {
     const [wasm] = await Promise.all([
-      fetch("hush.wasm").then((r) => r.arrayBuffer()),
-      ctx.audioWorklet.addModule("worklet.js"),
+      fetch("hush.wasm").then((r) => {
+        if (!r.ok) throw new Error(`hush.wasm: HTTP ${r.status}`);
+        return r.arrayBuffer();
+      }),
+      context.audioWorklet.addModule("worklet.js"),
     ]);
-    node = new AudioWorkletNode(ctx, "hush", { outputChannelCount: [2], processorOptions: { wasm } });
-    node.connect(ctx.destination);
-    node.port.onmessage = (e) => onStatus(e.data);
+    const n = new AudioWorkletNode(context, "hush", { outputChannelCount: [2], processorOptions: { wasm } });
+    n.connect(context.destination);
+    n.port.onmessage = (e) => onStatus(e.data);
+    ctx = context;
+    node = n;
+  } catch (err) {
+    context.close();
+    throw err;
   }
+}
+
+async function start() {
+  playing = true;
+  render();
+  try {
+    loading = loading || ensureAudio();
+    await loading;
+  } catch (err) {
+    console.error(err);
+    $("#breath-text").textContent = "Could not load the audio engine. Press Play to try again.";
+    playing = false;
+    render();
+    return;
+  } finally {
+    loading = null;
+  }
+  if (!playing) return; // stopped while loading
   await ctx.resume();
   pushAll();
   send("hush_play", 2);
-  playing = true;
-  render();
 }
 
 function stop() {
-  send("hush_fade_out", 1.5);
   playing = false;
+  send("hush_fade_out", 1.5);
   render();
 }
 
@@ -68,6 +97,7 @@ function seg(container, items, active, onPick) {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = label;
+    b.dataset.key = `${container.id}-${i}`;
     b.setAttribute("aria-pressed", String(i === active));
     b.onclick = () => onPick(i);
     container.appendChild(b);
@@ -75,6 +105,7 @@ function seg(container, items, active, onPick) {
 }
 
 function render() {
+  const focusedKey = document.activeElement && document.activeElement.dataset.key;
   $("#play").textContent = playing ? "Stop" : "Play";
   const tones = $("#tones");
   tones.innerHTML = "";
@@ -83,6 +114,7 @@ function render() {
     b.type = "button";
     b.className = "tile";
     b.setAttribute("aria-pressed", String(state.tone.hz === hz));
+    b.dataset.key = `tone-${hz}`;
     b.innerHTML = `<strong>${hz}</strong><span>${name}</span>`;
     b.onclick = () => { state.tone.hz = hz; pushAll(); render(); };
     tones.appendChild(b);
@@ -92,7 +124,24 @@ function render() {
   $("#beat-value").textContent = `${state.beat} Hz`;
   const colors = $("#colors");
   colors.innerHTML = "";
-  COLORS.forEach((label, i) => { const b = document.createElement("button"); b.type = "button"; b.className = "tile"; b.textContent = label; b.setAttribute("aria-pressed", String(state.noise.on && state.noise.color === i)); b.onclick = () => { state.noise.color = i; state.noise.on = true; $("#noise-on").checked = true; pushAll(); render(); }; colors.appendChild(b); });
+  COLORS.forEach((label, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tile";
+    b.dataset.key = `color-${i}`;
+    b.textContent = label;
+    b.setAttribute("aria-pressed", String(state.noise.on && state.noise.color === i));
+    b.onclick = () => {
+      state.noise.color = i;
+      state.noise.on = true;
+      $("#noise-on").checked = true;
+      pushAll();
+      render();
+    };
+    colors.appendChild(b);
+  });
+  // Buttons were rebuilt; put keyboard focus back where it was.
+  if (focusedKey) document.querySelector(`[data-key="${focusedKey}"]`)?.focus();
 }
 
 function bind() {
@@ -100,7 +149,7 @@ function bind() {
   $("#tone-on").onchange = (e) => { state.tone.on = e.target.checked; pushAll(); };
   $("#tone-level").oninput = (e) => { state.tone.level = +e.target.value; pushAll(); };
   $("#beat").oninput = (e) => { state.beat = +e.target.value; pushAll(); render(); };
-  $("#noise-on").onchange = (e) => { state.noise.on = e.target.checked; pushAll(); };
+  $("#noise-on").onchange = (e) => { state.noise.on = e.target.checked; pushAll(); render(); };
   $("#noise-level").oninput = (e) => { state.noise.level = +e.target.value; pushAll(); };
   $("#swell").onchange = (e) => { state.swell = e.target.checked; pushAll(); };
   $("#spatial").onchange = (e) => { state.spatial = e.target.checked; pushAll(); };
@@ -113,7 +162,7 @@ function bind() {
     nature.appendChild(row);
   });
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && !["INPUT", "BUTTON"].includes(document.activeElement.tagName)) {
+    if (e.code === "Space" && !e.repeat && !["INPUT", "BUTTON"].includes(document.activeElement.tagName)) {
       e.preventDefault();
       playing ? stop() : start();
     }

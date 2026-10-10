@@ -64,6 +64,8 @@ impl Biquad {
 
     /// Changes the filter without clearing its state, so it can sweep without clicks.
     pub fn set_bandpass(&mut self, center: f32, q: f32, sample_rate: f32) {
+        // A centre at or above Nyquist makes the filter unstable, so keep it safely below.
+        let center = center.min(0.45 * sample_rate);
         let w0 = 2.0 * PI * center / sample_rate;
         let alpha = w0.sin() / (2.0 * q);
         let a0 = 1.0 + alpha;

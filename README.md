@@ -14,14 +14,15 @@ It ships in three pieces:
 
 **Try it in your browser:** [hush-core.smitho.workers.dev](https://hush-core.smitho.workers.dev)
 
-This is the Rust port of the engine inside [Hush](https://github.com/abiodunosagie/hush), my native macOS app. The same behaviour is pinned by the same tests.
+This is the Rust port of the engine inside [Hush](https://github.com/abiodunosagie/hush), my native macOS app, with its test suite ported alongside.
 
 ## Quick start
 
 ```bash
 git clone https://github.com/abiodunosagie/hush-core.git
 cd hush-core
-cargo run --release -p hush-cli -- --help
+cargo install --path crates/hush-cli   # installs the `hush` command
+hush --help
 ```
 
 Some examples:
@@ -31,7 +32,7 @@ hush                                               # 852 Hz pure tone
 hush --preset "Deep sleep"                         # binaural 1 Hz on a 136 Hz carrier (headphones)
 hush --mode isochronic --beat 10 --tone 400        # pulsing tone, works on speakers
 hush --no-tone --noise brown --rain 0.5 --spatial  # brown noise and rain, sweeping side to side
-hush --wind-down --swell --timer 45m               # pulse walks from 10 Hz down to 1.5 Hz, slow fade at the end
+hush --wind-down --swell --timer 75m               # pulse walks from 10 Hz down to 1.5 Hz, slow fade at the end
 hush --list                                        # every tone and preset
 ```
 
@@ -45,7 +46,8 @@ use hush_core::{NoiseColor, Params, Synth, ToneMode};
 
 let params = Arc::new(Params::default());   // 852 Hz steady tone by default
 params.set_tone_mode(ToneMode::Binaural);
-params.beat_hz.set(6.0);
+params.set_beat_hz(6.0);
+params.set_noise_enabled(true);
 params.set_noise_color(NoiseColor::Pink);
 params.play(2.0);                            // two-second fade-in
 
@@ -59,7 +61,7 @@ synth.render_interleaved(&mut buffer, 2);
 params.fade_out(600.0);                      // ten-minute fade to silence
 ```
 
-`Params` is a set of atomics behind an `Arc`, so a UI thread can change anything while the audio thread renders.
+`Params` is a set of atomics behind an `Arc`, so a UI thread can change anything while the audio thread renders. Setters ignore non-finite values and clamp the rest to the engine's ranges, so one bad input can never poison the oscillators.
 
 ## Features
 
@@ -73,14 +75,15 @@ params.fade_out(600.0);                      // ten-minute fade to silence
 - **Nature sounds.** Rain, ocean waves, wind, fireplace and stream, made from filtered noise. You can layer as many as you like.
 - **Movement.** A breathing swell at six cycles a minute, and an equal-power side-to-side pan for the noise and nature sounds. The tone stays centred, because panning a binaural tone would destroy the beat.
 - **Journeys.** The pulse rate steps down in stages and glides between them.
-- **Long fades.** The master gain ramps over any length, from a two-second fade-in to a ten-minute sleep fade.
+- **Long fades.** The master gain ramps over any length, from a two-second fade-in to a ten-minute sleep fade. In the terminal player, Ctrl-C fades out instead of cutting the sound.
 
 Tone and preset names (Third eye, Deep sleep and so on) are the traditional Solfeggio and brainwave labels people search for. This is not a medical device and makes no health claims.
 
 ## How it is built
 
-- **The render loop does not allocate. A test proves it.** `tests/no_alloc.rs` installs a counting global allocator, switches every layer on, renders 500 blocks while changing noise colour, and asserts zero allocations. The working state is fixed-size arrays, filled in place.
+- **The render loop does not allocate. A test proves it.** `tests/no_alloc.rs` installs a counting global allocator, switches every layer on, renders 500 blocks while changing noise colour, and asserts zero allocations on the rendering thread. The working state is fixed-size arrays, filled in place.
 - **No locks on the audio thread.** Controls are atomics with relaxed ordering. Each value stands alone, and a change landing one block late is inaudible.
+- **Validated controls.** NaN or infinity is ignored at the setter, and filter centres are kept below Nyquist, so a bad value or a low sample rate cannot make the output blow up.
 - **Every gain change ramps.**
   - Knobs and switches go through a one-pole smoother that snaps to its target once close, so values never decay into slow subnormal floats.
   - A noise colour change dips to silence before the filter state resets, then comes back.
@@ -108,7 +111,7 @@ CI runs formatting, Clippy with warnings denied, and the full test suite on Linu
 - A rebuilt engine continues the fade and the breathing position.
 - The journey schedule holds, glides and keeps the last stage.
 - Interleaved output handles mono, stereo and extra channels.
-- `render` never allocates (in a separate test binary with a counting allocator).
+- `render` never allocates. This runs in a separate test binary whose counting allocator watches only the rendering thread.
 
 ## Browser demo
 
@@ -117,7 +120,7 @@ CI runs formatting, Clippy with warnings denied, and the full test suite on Linu
 python3 -m http.server -d web 8000     # then open http://localhost:8000
 ```
 
-The page sends the WebAssembly bytes to an AudioWorklet once, then posts small control messages. The worklet renders each 128-frame quantum in Rust. Only the control functions can be called from the page; render and init cannot. The demo is deployed as static assets on Cloudflare Workers (`wrangler.jsonc`).
+The page sends the WebAssembly bytes to an AudioWorklet once, then posts small control messages. The worklet renders each 128-frame quantum in Rust. Only the control functions can be called from the page; render and init cannot. `web/hush.wasm` is committed so the demo deploys as plain files; rebuild it with the script after changing the engine. The demo is deployed as static assets on Cloudflare Workers (`wrangler.jsonc`).
 
 ## Project layout
 

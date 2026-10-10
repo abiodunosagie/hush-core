@@ -13,7 +13,7 @@
 //!
 //! let params = Arc::new(Params::default());
 //! params.set_tone_mode(ToneMode::Binaural);
-//! params.beat_hz.set(6.0);
+//! params.set_beat_hz(6.0);
 //! params.play(2.0);
 //!
 //! let mut synth = Synth::new(48_000.0, params.clone());
@@ -21,16 +21,16 @@
 //! synth.render_interleaved(&mut buffer, 2);
 //! ```
 
-pub mod ambient;
-pub mod dsp;
+mod ambient;
+mod dsp;
 pub mod journey;
-pub mod noise;
+mod noise;
 pub mod params;
 pub mod presets;
-pub mod rng;
+mod rng;
 pub mod synth;
 
 pub use ambient::AmbientKind;
 pub use noise::NoiseColor;
-pub use params::{AtomicF32, Params, ToneMode};
+pub use params::{Params, ToneMode};
 pub use synth::Synth;
