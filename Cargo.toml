@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/hush-core", "crates/hush-cli", "crates/hush-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Abiodun Osagie"]
+repository = "https://github.com/abiodunosagie/hush-core"
+
+[profile.release]
+lto = true
+codegen-units = 1

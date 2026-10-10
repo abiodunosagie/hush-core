@@ -1,0 +1,6 @@
+{
+  // Static demo: web/ served as Workers static assets, no Worker script.
+  "name": "hush-core",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "./web" }
+}

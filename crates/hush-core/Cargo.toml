@@ -1,0 +1,13 @@
+[package]
+name = "hush-core"
+description = "Real-time calm and sleep sound engine: pure tones, binaural and isochronic beats, seven noise colours and procedural nature sounds. Allocation-free render loop."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+keywords = ["audio", "dsp", "noise", "binaural", "sleep"]
+categories = ["multimedia::audio"]
+
+[dependencies]
