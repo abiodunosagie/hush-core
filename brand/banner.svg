@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640"><title>Hush</title><rect width="1280" height="640" fill="#12141C"/><style>
+.wipe{transform-box:fill-box;transform-origin:left center;animation:grow 1.2s cubic-bezier(.65,0,.35,1) .2s both}
+.tail{transform-box:fill-box;transform-origin:left center;animation:grow .7s cubic-bezier(.22,1,.36,1) 1.4s both}
+.line{animation:fade .8s ease-out 1.9s both}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.wipe,.tail,.line{animation:none}}
+</style><defs><clipPath id="reveal"><rect class="wipe" x="0" y="0" width="445" height="256"/></clipPath></defs><g transform="translate(115,120.9) scale(0.93)"><g clip-path="url(#reveal)"><path d="M11,53 V203 M11,143 A40,40 0 0 1 91,143 V203 M121,103 V163 A40,40 0 0 0 201,163 V203 M201,103 V163 M288.21,113.66 A32,25 0 1 0 262,153 A32,25 0 1 1 235.79,192.34 M335,53 V203 M335,143 A40,40 0 0 1 415,143 V178 A25,25 0 0 0 440,203" fill="none" stroke="#F2B66B" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></g><path class="tail" d="M440,203 H456" fill="none" stroke="#F2B66B" stroke-width="22" stroke-linecap="round"/></g><text class="line" x="571" y="320" font-family="Menlo,monospace" font-size="44" fill="#9A9AA6">core</text><g class="line"><text x="115" y="405" font-family="-apple-system,BlinkMacSystemFont,Helvetica Neue,Arial,sans-serif" font-size="40" fill="#E9E5DC">A real-time calm and sleep sound engine in Rust.</text><text x="115" y="460" font-family="Menlo,monospace" font-size="24" fill="#9A9AA6">Rust · terminal player · WebAssembly</text></g></svg>

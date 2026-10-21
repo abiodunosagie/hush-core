@@ -1,4 +1,4 @@
-<img src="brand/banner.png" alt="hush-core: a real-time calm and sleep sound engine in Rust" width="100%">
+<img src="brand/banner.svg" alt="hush-core: a real-time calm and sleep sound engine in Rust" width="100%">
 
 [![CI](https://github.com/abiodunosagie/hush-core/actions/workflows/ci.yml/badge.svg)](https://github.com/abiodunosagie/hush-core/actions/workflows/ci.yml)
 
