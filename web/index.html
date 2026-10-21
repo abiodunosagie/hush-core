@@ -7,22 +7,32 @@
 <meta name="description" content="Calm and sleep sounds synthesized live in your browser by hush-core, a Rust audio engine compiled to WebAssembly.">
 <meta property="og:title" content="Hush in the browser">
 <meta property="og:description" content="Pure tones, binaural beats, seven noise colours and nature sounds, synthesized live by a Rust engine in WebAssembly.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 fill=%22%2315161a%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2214%22 fill=%22%23f0805e%22/%3E%3C/svg%3E">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:image" content="https://hush-core.smitho.workers.dev/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f4f2ed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12141C" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#f4f2ed; --bg2:#ebe7df; --ink:#15161a; --soft:#3f424a; --mute:#5b5e66; --accent:#b4381f; --on-accent:#fff; --line:rgba(21,22,26,.13); --line2:rgba(21,22,26,.3); }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111214; --bg2:#191a1d; --ink:#eeece7; --soft:#b7b8bc; --mute:#979a9f; --accent:#f0805e; --on-accent:#15161a; --line:rgba(238,236,231,.12); --line2:rgba(238,236,231,.3); } }
+  :root { --bg:#f4f2ed; --bg2:#ebe7df; --ink:#12141C; --soft:#3f424a; --mute:#5b5e66; --accent:#9C5A12; --on-accent:#fff; --logo:#12141C; --line:rgba(18,20,28,.13); --line2:rgba(18,20,28,.3); }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12141C; --bg2:#1A1D28; --ink:#eeece7; --soft:#b7b8bc; --mute:#979a9f; --accent:#F2B66B; --on-accent:#12141C; --logo:#F2B66B; --line:rgba(238,236,231,.12); --line2:rgba(238,236,231,.3); } }
   * { box-sizing: border-box; margin: 0; }
   body { background: var(--bg); color: var(--ink); font: 16px/1.5 "Schibsted Grotesk", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 1200px; margin: 0 auto; padding: 48px 24px 64px; display: grid; gap: 48px; grid-template-columns: 1fr; }
   @media (min-width: 960px) { .wrap { grid-template-columns: 5fr 7fr; padding: 72px 48px; } .intro { position: sticky; top: 48px; align-self: start; } }
-  .eyebrow { font-weight: 600; color: var(--accent); }
+  .brand { display: flex; align-items: baseline; gap: 10px; color: var(--logo); }
+  .brand svg { height: 34px; width: auto; display: block; }
+  .brand span { font: 400 14px "IBM Plex Mono", monospace; color: var(--mute); }
   h1 { font-size: clamp(40px, 6vw, 68px); line-height: .98; letter-spacing: -.035em; font-weight: 800; margin-top: 12px; }
   .lead { font-size: 18px; color: var(--soft); margin-top: 20px; max-width: 46ch; }
   .mono { font-family: "IBM Plex Mono", monospace; font-size: 14px; color: var(--mute); margin-top: 16px; }
-  #play { margin-top: 32px; width: 100%; padding: 18px; font: 700 18px "Schibsted Grotesk", sans-serif; background: var(--ink); color: var(--bg); border: 0; cursor: pointer; }
-  #play:hover { background: var(--accent); color: var(--on-accent); }
+  #play { margin-top: 32px; width: 100%; padding: 18px; font: 700 18px "Schibsted Grotesk", sans-serif; background: var(--accent); color: var(--on-accent); border: 0; cursor: pointer; }
+  #play:hover { opacity: .9; }
+  #play:active { opacity: .8; }
   .breath { margin-top: 28px; display: flex; align-items: center; gap: 16px; }
   .ring { width: 64px; height: 64px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 14%, transparent); display: grid; place-items: center; flex: none; }
   #breath-dot { width: 64px; height: 64px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 55%, transparent); transform: scale(.7); transition: transform .12s linear; }
@@ -38,8 +48,8 @@
   button { font: inherit; color: inherit; }
   .tile, .seg button { background: var(--bg2); border: 1px solid transparent; padding: 10px 8px; cursor: pointer; text-align: center; }
   .tile strong { display: block; font-size: 17px; } .tile span { display: block; font-size: 12px; color: var(--mute); }
-  [aria-pressed="true"] { background: var(--ink) !important; color: var(--bg) !important; }
-  [aria-pressed="true"] span { color: inherit !important; opacity: .8; }
+  .tile[aria-pressed="true"], .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  .tile[aria-pressed="true"] span { color: inherit; }
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 16px; border: 1px solid var(--line2); }
   .seg button { background: transparent; font-weight: 600; padding: 12px 8px; }
   #colors { grid-template-columns: repeat(4, 1fr); }
@@ -57,7 +67,8 @@
 <body>
 <main class="wrap">
   <div class="intro">
-    <p class="eyebrow">hush-core</p>
+    <!-- Same geometry as brand/hush-wordmark-night.svg, inlined so it takes the theme colour. -->
+    <p class="brand"><svg role="img" aria-label="hush" xmlns="http://www.w3.org/2000/svg" viewBox="0 42 467 172"><path d="M11,53 V203 M11,143 A40,40 0 0 1 91,143 V203 M121,103 V163 A40,40 0 0 0 201,163 V203 M201,103 V163 M288.21,113.66 A32,25 0 1 0 262,153 A32,25 0 1 1 235.79,192.34 M335,53 V203 M335,143 A40,40 0 0 1 415,143 V178 A25,25 0 0 0 440,203 H456" fill="none" stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/></svg><span>core</span></p>
     <h1>Calm sound, synthesized live in your browser.</h1>
     <p class="lead">Pure tones, binaural and isochronic beats, seven colours of noise and five nature sounds. Nothing is a recording: a Rust audio engine compiled to WebAssembly makes every sample as you listen.</p>
     <p class="mono">Rust &middot; WebAssembly &middot; AudioWorklet &middot; zero allocations per audio block</p>

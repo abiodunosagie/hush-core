@@ -1,4 +1,10 @@
-# hush-core
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/hush-wordmark-lamp.svg">
+    <img src="brand/hush-wordmark-night.svg" alt="hush" width="150">
+  </picture>
+  core
+</h1>
 
 [![CI](https://github.com/abiodunosagie/hush-core/actions/workflows/ci.yml/badge.svg)](https://github.com/abiodunosagie/hush-core/actions/workflows/ci.yml)
 
