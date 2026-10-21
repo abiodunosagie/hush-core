@@ -1,10 +1,4 @@
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="brand/hush-wordmark-lamp.svg">
-    <img src="brand/hush-wordmark-night.svg" alt="hush" width="150">
-  </picture>
-  core
-</h1>
+<img src="brand/banner.png" alt="hush-core: a real-time calm and sleep sound engine in Rust" width="100%">
 
 [![CI](https://github.com/abiodunosagie/hush-core/actions/workflows/ci.yml/badge.svg)](https://github.com/abiodunosagie/hush-core/actions/workflows/ci.yml)
 
